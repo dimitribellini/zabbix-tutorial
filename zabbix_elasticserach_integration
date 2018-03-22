@@ -1,0 +1,281 @@
+
+# Link to documentation https://www.zabbix.com/documentation/3.4/manual/appendix/install/elastic_search_setup
+# Install Zabbix From Source only for Elasticsearch Mapping file...
+
+# Download Zabbix
+- https://www.zabbix.com/download
+
+# Compile Zabbix (https://www.zabbix.com/documentation/3.4/manual/installation/install)
+> yum install libcurl-devel libevent-devel make gcc net-snmp-devel libxml2-devel mariadb-devel libssh2-devel
+> ./configure --enable-server --enable-agent --with-mysql --with-net-snmp --with-libcurl --with-libxml2 --with-ssh2
+
+# Modify Zabbix_server.conf for Elasticsearch (/etc/zabbix/zabbix_server.conf)
+--
+HistoryStorageURL=http://10.10.11.216:9200
+HistoryStorageTypes=uint,dbl,str,log,text
+
+# Modify Frontent configuration file (/var/www/html/zabbix/conf/zabbix.conf.php)
+--
+global $DB, $HISTORY;
+...
+$HISTORY['url']   = 'http://10.10.11.216:9200';
+$HISTORY['types'] = ['str', 'text', 'log','uint','dbl'];
+
+# Install Elasticserach 6.1 on Centos7 (https://www.server-world.info/en/note?os=CentOS_7&p=elasticstack6&f=1)
+---
+# create new Repo
+file: /etc/yum.repos.d/elx.repo
+--
+[elasticsearch-6.x]
+name=Elasticsearch repository for 6.x packages
+baseurl=https://artifacts.elastic.co/packages/6.x/yum
+gpgcheck=1
+gpgkey=https://artifacts.elastic.co/GPG-KEY-elasticsearch
+enabled=1
+autorefresh=1
+type=rpm-md
+
+# Install the Elasticsearch & Java
+> yum install java-1.8.0 elasticsearch -y
+
+# Configure Elasticsearch Cluster
+
+file: /etc/elasticsearch/elasticsearch.yml
+--
+cluster.name: elx-zabbix
+node.name: ${HOSTNAME}
+network.host: 0.0.0.0
+path.data: /var/lib/elasticsearch
+path.logs: /var/log/elasticsearch
+discovery.zen.ping.unicast.hosts: ["10.10.11.216", "10.10.11.217","10.10.11.218"]
+--
+
+
+# Enable Services
+> systemctl start elasticsearch 
+> systemctl enable elasticsearch
+
+
+# Install Cerebro GUI (https://github.com/lmenezes/cerebro)
+> wget https://github.com/lmenezes/cerebro/releases/download/v0.7.2/cerebro-0.7.2.tgz
+> tar zxvf cerebro-0.7.2.tgz
+> cd cerebro-0.7.2/bin
+> ./cerebro.sh
+
+-> Goto http://10.10.11.216:9000
+
+# Define Mapping for Zabbix Server
+
+> cat zabbix-3.4.6/database/elasticsearch/elasticsearch.map
+
+# Import Mapping from Zabbix Index
+---
+curl -X PUT \
+ http://10.10.11.216:9200/text \
+ -H 'content-type:application/json' \
+ -d '{
+ "settings" : {
+    "index" : {
+       "number_of_replicas" : 1,
+       "number_of_shards" : 5
+    }
+ },
+ "mappings" : {
+    "values" : {
+       "properties" : {
+          "itemid" : {
+             "type" : "long"
+          },
+          "clock" : {
+             "format" : "epoch_second",
+             "type" : "date"
+          },
+          "value" : {
+             "fields" : {
+                "analyzed" : {
+                   "index" : true,
+                   "type" : "text",
+                   "analyzer" : "standard"
+                }
+             },
+             "index" : false,
+             "type" : "text"
+          }
+       }
+    }
+ }
+}'
+
+curl -X PUT \
+ http://10.10.11.216:9200/uint \
+ -H 'content-type:application/json' \
+ -d '{
+   "settings" : {
+      "index" : {
+         "number_of_replicas" : 1,
+         "number_of_shards" : 5
+      }
+   },
+   "mappings" : {
+      "values" : {
+         "properties" : {
+            "itemid" : {
+               "type" : "long"
+            },
+            "clock" : {
+               "format" : "epoch_second",
+               "type" : "date"
+            },
+            "value" : {
+               "type" : "long"
+            }
+         }
+      }
+   }
+}'
+
+curl -X PUT \
+ http://10.10.11.216:9200/dbl \
+ -H 'content-type:application/json' \
+ -d '{
+   "settings" : {
+      "index" : {
+         "number_of_replicas" : 1,
+         "number_of_shards" : 5
+      }
+   },
+   "mappings" : {
+      "values" : {
+         "properties" : {
+            "itemid" : {
+               "type" : "long"
+            },
+            "clock" : {
+               "format" : "epoch_second",
+               "type" : "date"
+            },
+            "value" : {
+               "type" : "double"
+            }
+         }
+      }
+   }
+}'
+
+curl -X PUT \
+ http://10.10.11.216:9200/str \
+ -H 'content-type:application/json' \
+ -d '{
+   "settings" : {
+      "index" : {
+         "number_of_replicas" : 1,
+         "number_of_shards" : 5
+      }
+   },
+   "mappings" : {
+      "values" : {
+         "properties" : {
+            "itemid" : {
+               "type" : "long"
+            },
+            "clock" : {
+               "format" : "epoch_second",
+               "type" : "date"
+            },
+            "value" : {
+               "fields" : {
+                  "analyzed" : {
+                     "index" : true,
+                     "type" : "text",
+                     "analyzer" : "standard"
+                  }
+               },
+               "index" : false,
+               "type" : "text"
+            }
+         }
+      }
+   }
+}'
+
+curl -X PUT \
+ http://10.10.11.216:9200/log \
+ -H 'content-type:application/json' \
+ -d '{
+   "settings" : {
+      "index" : {
+         "number_of_replicas" : 1,
+         "number_of_shards" : 5
+      }
+   },
+   "mappings" : {
+      "values" : {
+         "properties" : {
+            "itemid" : {
+               "type" : "long"
+            },
+            "clock" : {
+               "format" : "epoch_second",
+               "type" : "date"
+            },
+            "value" : {
+               "fields" : {
+                  "analyzed" : {
+                     "index" : true,
+                     "type" : "text",
+                     "analyzer" : "standard"
+                  }
+               },
+               "index" : false,
+               "type" : "text"
+            }
+         }
+      }
+   }
+}'
+-------
+
+# Usefull commands on Elasticserach
+
+> curl -XGET http://127.0.0.1:9200/_cat/nodes?v
+ip           heap.percent ram.percent cpu load_1m load_5m load_15m node.role master name
+10.10.11.217            8          96   2    0.09    0.05     0.05 mdi       -      elx2.quadrata.it
+10.10.11.216            9          96   2    0.06    0.09     0.09 mdi       *      elx1.quadrata.it
+10.10.11.218           11          96   2    0.18    0.09     0.07 mdi       -      elx3.quadrata.it
+
+> curl -XGET http://127.0.0.1:9200/_cat/indices?v
+health status index uuid                   pri rep docs.count docs.deleted store.size pri.store.size
+green  open   str   t8QiPODwQhGS-6eP055wGw   5   1          0            0      2.2kb          1.1kb
+green  open   uint  QLircLj2Tqi-6-i0-raJEw   5   1         63            0    258.3kb        129.1kb
+green  open   log   ciA6CjapRQWdcqpzgExgcg   5   1          0            0      2.2kb          1.1kb
+green  open   dbl   IHqQxgSQReK6wSRpzQ0HWQ   5   1        180            0    203.5kb        101.7kb
+green  open   text  DXY-1TsUQoSgB5yYsstT1A   5   1          0            0      2.2kb          1.1kb
+
+> curl -XGET http://127.0.0.1:9200/dbl/_search?pretty
+{
+  "took" : 9,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 5,
+    "successful" : 5,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : 254,
+    "max_score" : 1.0,
+    "hits" : [
+      {
+        "_index" : "dbl",
+        "_type" : "values",
+        "_id" : "jqQ0sGEBEdvKFotI_2vX",
+        "_score" : 1.0,
+        "_source" : {
+          "itemid" : 23299,
+          "value" : "76.253343",
+          "clock" : 1519079719,
+          "ns" : 435992848,
+          "ttl" : 604800
+        }
+      },
+....
