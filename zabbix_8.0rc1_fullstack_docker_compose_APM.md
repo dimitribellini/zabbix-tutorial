@@ -281,7 +281,7 @@ docker restart zabbix-proxy-mysql
 **1. Generate Dummy Data:**
 Find your docker network name (`docker network ls`), then run the official OpenTelemetry generator:
 ```bash
-docker run --rm --network <YOUR_NETWORK_NAME> \
+docker run --rm --network zabbix-net \
   ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest \
   traces --otlp-insecure --otlp-endpoint="zabbix-proxy-mysql:4317" --rate=5 --duration=60s
 ```
